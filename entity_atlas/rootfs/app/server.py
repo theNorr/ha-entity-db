@@ -84,8 +84,38 @@ def db_connect() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notes (
+            key     TEXT PRIMARY KEY,
+            value   TEXT NOT NULL DEFAULT '',
+            updated TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     conn.commit()
     return conn
+
+
+def db_get_note(key: str) -> str:
+    with db_connect() as c:
+        row = c.execute("SELECT value FROM notes WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else ""
+
+
+def db_set_note(key: str, value: str) -> None:
+    with db_connect() as c:
+        c.execute(
+            """
+            INSERT INTO notes(key, value, updated)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE
+                SET value = excluded.value,
+                    updated = excluded.updated
+            """,
+            (key, value),
+        )
+        c.commit()
 
 
 def db_get_comments() -> dict[str, str]:
@@ -469,6 +499,27 @@ def make_app(ha: HAClient) -> web.Application:
     app.router.add_get("/api/data", api_data)
     app.router.add_post("/api/entity", api_update_entity)
     app.router.add_post("/api/device", api_update_device)
+
+    # --- Free-form notes (description of naming scheme etc.) -------------
+
+    async def api_get_notes(_req: web.Request) -> web.Response:
+        return web.json_response({"readme": db_get_note("readme")})
+
+    async def api_set_notes(req: web.Request) -> web.Response:
+        try:
+            body = await req.json()
+        except Exception:
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        if "readme" not in body or not isinstance(body["readme"], str):
+            return web.json_response({"error": "readme (string) required"}, status=400)
+        # Sanity cap — nobody should paste a novel in here.
+        if len(body["readme"]) > 64_000:
+            return web.json_response({"error": "note too long (64kB max)"}, status=400)
+        db_set_note("readme", body["readme"])
+        return web.json_response({"ok": True})
+
+    app.router.add_get("/api/notes", api_get_notes)
+    app.router.add_post("/api/notes", api_set_notes)
 
     # --- Static UI ---------------------------------------------------------
 
