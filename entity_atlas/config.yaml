@@ -1,11 +1,11 @@
 name: Entity Atlas
-version: "1.0.0"
+version: "1.0.1"
 slug: entity_atlas
 description: >-
   A dense, editable database of every Home Assistant entity — with
   device, area, floor, integration, and your own notes. Edits flow
   back into Home Assistant wherever possible.
-url: "https://github.com/your-user/ha-entity-atlas"
+url: "https://github.com/theNorr/ha-entity-db"
 
 arch:
   - aarch64
