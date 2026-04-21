@@ -74,6 +74,37 @@
   </div>
 </section>
 
+<details class="notes" id="notes">
+  <summary>
+    <span class="notes__chev" aria-hidden="true">▸</span>
+    <span class="notes__title">Naming scheme &amp; notes</span>
+    <span class="notes__hint" id="notes-hint">— click to expand</span>
+  </summary>
+  <div class="notes__body">
+    <div class="notes__toolbar">
+      <span class="notes__meta" id="notes-meta">Loading…</span>
+      <span class="notes__spacer"></span>
+      <button id="notes-edit"   class="btn">Edit</button>
+      <button id="notes-save"   class="btn btn--primary" hidden>Save</button>
+      <button id="notes-cancel" class="btn" hidden>Cancel</button>
+    </div>
+    <div class="notes__view" id="notes-view">
+      <p class="notes__empty">
+        Describe your naming convention, prefix glossary, how you tag
+        rooms, anything future-you will be glad to find here. Click
+        <strong>Edit</strong> to start.
+      </p>
+    </div>
+    <textarea
+      id="notes-edit-area"
+      class="notes__textarea"
+      hidden
+      spellcheck="true"
+      placeholder="e.g.&#10;&#10;## Naming scheme&#10;- Shelly devices: `shelly_&lt;room&gt;_&lt;function&gt;` (e.g. `shelly_hallway_relay`)&#10;- Sensors: `&lt;room&gt;_&lt;quantity&gt;` (e.g. `kitchen_temperature`)&#10;&#10;## Abbreviations&#10;- `hw` — hallway&#10;- `br1` — bedroom 1"
+    ></textarea>
+  </div>
+</details>
+
 <main class="grid-wrap">
   <div class="grid-status" id="grid-status">Loading…</div>
   <table class="grid" id="grid" role="grid">
