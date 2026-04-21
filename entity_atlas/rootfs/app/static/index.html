@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Entity Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+<link rel="stylesheet" href="static/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand__mark" aria-hidden="true">
+      <!-- a little schematic glyph, just a mark -->
+      <svg viewBox="0 0 24 24" width="22" height="22">
+        <path d="M3 5h18M3 12h18M3 19h18" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <circle cx="7"  cy="5"  r="1.6" fill="currentColor"/>
+        <circle cx="14" cy="12" r="1.6" fill="currentColor"/>
+        <circle cx="10" cy="19" r="1.6" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="brand__text">
+      <h1>Entity&nbsp;Atlas</h1>
+      <p class="brand__sub">a database view of home assistant</p>
+    </div>
+  </div>
+
+  <div class="stats" id="stats">
+    <span class="stat"><em id="c-entities">—</em><span>entities</span></span>
+    <span class="stat"><em id="c-devices">—</em><span>devices</span></span>
+    <span class="stat"><em id="c-areas">—</em><span>areas</span></span>
+    <span class="stat"><em id="c-floors">—</em><span>floors</span></span>
+  </div>
+
+  <div class="actions">
+    <button id="btn-refresh"  class="btn">Refresh</button>
+    <button id="btn-export"   class="btn">Export CSV</button>
+    <button id="btn-columns"  class="btn">Columns</button>
+  </div>
+</header>
+
+<section class="filters">
+  <input id="q" class="q" type="search" placeholder="Search entities, devices, areas, manufacturers…  (/ to focus)" />
+
+  <div class="chips" id="domain-chips" aria-label="Domain filter"></div>
+
+  <div class="selects">
+    <label>
+      <span>area</span>
+      <select id="f-area"><option value="">all</option></select>
+    </label>
+    <label>
+      <span>floor</span>
+      <select id="f-floor"><option value="">all</option></select>
+    </label>
+    <label>
+      <span>manufacturer</span>
+      <select id="f-mfr"><option value="">all</option></select>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="f-missing" />
+      <span>unassigned only</span>
+    </label>
+  </div>
+</section>
+
+<main class="grid-wrap">
+  <div class="grid-status" id="grid-status">Loading…</div>
+  <table class="grid" id="grid" role="grid">
+    <thead id="grid-head"></thead>
+    <tbody id="grid-body"></tbody>
+  </table>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Column picker popover -->
+<div class="pop" id="pop-columns" hidden>
+  <header>Visible columns</header>
+  <div class="pop__body" id="pop-cols-list"></div>
+</div>
+
+<script src="static/app.js"></script>
+</body>
+</html>
