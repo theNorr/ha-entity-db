@@ -16,18 +16,19 @@ const API = {
 //
 //   key       : field on the row
 //   label     : header text
-//   kind      : 'text' | 'pill' | 'state' | 'mono' | 'comment' | 'list' | 'area' | 'friendly'
-//   editable  : how the cell saves — null | 'friendly' | 'area' | 'device_name' | 'comment'
+//   kind      : 'text' | 'pill' | 'state' | 'mono' | 'comment' | 'list' | 'area' | 'friendly' | 'entity_id'
+//   editable  : how the cell saves — null | 'friendly' | 'area' | 'device_name' | 'comment' | 'object_id'
 //   default   : visible by default
 //   width     : initial CSS width hint
 //
-// "editable: 'friendly'" means edits POST /api/entity with friendly_name.
-// "editable: 'area'"     means edits POST /api/entity with area_id (dropdown).
+// "editable: 'friendly'"    means edits POST /api/entity with friendly_name.
+// "editable: 'area'"        means edits POST /api/entity with area_id (dropdown).
 // "editable: 'device_name'" means edits POST /api/device with device_name.
-// "editable: 'comment'"  stays local (the backend stores it in SQLite).
+// "editable: 'comment'"     stays local (the backend stores it in SQLite).
+// "editable: 'object_id'"   renames the entity_id in HA (domain stays fixed).
 
 const COLS = [
-  { key: 'entity_id',     label: 'entity_id',     kind: 'mono',      editable: null,           default: true,  width: '240px' },
+  { key: 'entity_id',     label: 'entity_id',     kind: 'entity_id', editable: 'object_id',    default: true,  width: '260px' },
   { key: 'friendly_name', label: 'friendly name', kind: 'friendly',  editable: 'friendly',     default: true,  width: '220px' },
   { key: 'state',         label: 'state',         kind: 'state',     editable: null,           default: true,  width: '110px' },
   { key: 'domain',        label: 'domain',        kind: 'pill',      editable: null,           default: true,  width: '110px' },
@@ -66,6 +67,8 @@ const state = {
   area: '',
   floor: '',
   manufacturer: '',
+  device: '',                     // device_id filter
+  entity: '',                     // entity_id filter
   missingOnly: false,
   visibleCols: new Set(COLS.filter(c => c.default).map(c => c.key)),
 };
@@ -96,6 +99,12 @@ function wireStaticUI() {
   });
   document.getElementById('f-mfr').addEventListener('change', (e) => {
     state.manufacturer = e.target.value; applyFilters(); renderBody();
+  });
+  document.getElementById('f-device').addEventListener('change', (e) => {
+    state.device = e.target.value; applyFilters(); renderBody();
+  });
+  document.getElementById('f-entity').addEventListener('change', (e) => {
+    state.entity = e.target.value; applyFilters(); renderBody();
   });
   document.getElementById('f-missing').addEventListener('change', (e) => {
     state.missingOnly = e.target.checked; applyFilters(); renderBody();
@@ -207,6 +216,28 @@ function buildSelects() {
   const mfrs = [...new Set(state.rows.map(r => r.manufacturer).filter(Boolean))].sort();
   document.getElementById('f-mfr').innerHTML =
     '<option value="">all</option>' + mfrs.map(m => `<option>${esc(m)}</option>`).join('');
+
+  // Device dropdown: unique device_id → best-known name, sorted by name.
+  const deviceById = new Map();
+  for (const r of state.rows) {
+    if (!r.device_id) continue;
+    if (!deviceById.has(r.device_id)) {
+      deviceById.set(r.device_id, r.device_name || r.device_id);
+    }
+  }
+  const devices = [...deviceById.entries()]
+    .sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  document.getElementById('f-device').innerHTML =
+    '<option value="">all</option>' +
+    devices.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+
+  // Entity dropdown: entity_id → "friendly name (entity_id)", sorted by friendly.
+  const entities = state.rows
+    .map(r => ({ id: r.entity_id, label: `${r.friendly_name} · ${r.entity_id}` }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  document.getElementById('f-entity').innerHTML =
+    '<option value="">all</option>' +
+    entities.map(e => `<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('');
 }
 
 function applyFilters() {
@@ -216,6 +247,8 @@ function applyFilters() {
     if (state.area && r.area_id !== state.area) return false;
     if (state.floor && r.floor_id !== state.floor) return false;
     if (state.manufacturer && r.manufacturer !== state.manufacturer) return false;
+    if (state.device && r.device_id !== state.device) return false;
+    if (state.entity && r.entity_id !== state.entity) return false;
     if (state.missingOnly && r.area_id) return false;
     if (!q) return true;
     return (
@@ -342,6 +375,22 @@ function buildCell(row, col) {
       if (!v) { td.innerHTML = '<span class="dim">—</span>'; }
       break;
     }
+    case 'entity_id': {
+      // Render as "<domain>.<object_id>" with the domain visually locked
+      // (editing only rewrites the part after the dot).
+      const wrap = document.createElement('span');
+      wrap.className = 'eid';
+      const pre = document.createElement('span');
+      pre.className = 'eid__domain';
+      pre.textContent = row.domain + '.';
+      const obj = document.createElement('span');
+      obj.className = 'eid__object';
+      obj.textContent = row.object_id || '';
+      wrap.appendChild(pre);
+      wrap.appendChild(obj);
+      td.appendChild(wrap);
+      break;
+    }
     default: {
       td.textContent = v ?? '';
       if (v == null || v === '') td.innerHTML = '<span class="dim">—</span>';
@@ -362,6 +411,7 @@ function editHint(kind) {
     case 'area':        return 'Double-click to reassign area (updates Home Assistant)';
     case 'device_name': return 'Double-click to rename device (updates Home Assistant)';
     case 'comment':     return 'Double-click to add a note (stored in the add-on)';
+    case 'object_id':   return 'Double-click to rename the entity_id (updates Home Assistant — domain stays the same)';
     default:            return 'Double-click to edit';
   }
 }
@@ -380,7 +430,8 @@ function enterEdit(td, row, col) {
   const tr = td.closest('tr');
   tr.classList.add('editing');
 
-  // Area uses a dropdown; everything else is a text input.
+  // Area uses a dropdown; entity_id uses a locked-prefix input;
+  // everything else is a plain text input.
   if (col.editable === 'area') {
     const sel = document.createElement('select');
     sel.className = 'edit';
@@ -401,6 +452,44 @@ function enterEdit(td, row, col) {
     sel.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') sel.blur();
       if (e.key === 'Escape') { sel.removeEventListener('blur', commit); cancel(); }
+    });
+    return;
+  }
+
+  if (col.editable === 'object_id') {
+    // Render a locked domain prefix with an editable object_id input
+    // right after it. HA won't let you change the domain portion.
+    td.textContent = '';
+    const wrap = document.createElement('span');
+    wrap.className = 'eid eid--editing';
+    const pre = document.createElement('span');
+    pre.className = 'eid__domain';
+    pre.textContent = row.domain + '.';
+    const input = document.createElement('input');
+    input.className = 'edit eid__input';
+    input.type = 'text';
+    input.value = row.object_id || '';
+    input.spellcheck = false;
+    input.autocapitalize = 'off';
+    input.autocomplete = 'off';
+    // Keep typing clean: force lowercase and replace illegal chars
+    // live, so the user sees exactly what HA will accept.
+    input.addEventListener('input', () => {
+      const cleaned = input.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      if (cleaned !== input.value) input.value = cleaned;
+    });
+    wrap.appendChild(pre);
+    wrap.appendChild(input);
+    td.appendChild(wrap);
+    input.focus();
+    input.select();
+
+    const commit = () => finishEdit(td, tr, row, col, input.value);
+    const cancel = () => { tr.classList.remove('editing'); renderBody(); };
+    input.addEventListener('blur', commit, { once: true });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.removeEventListener('blur', commit); cancel(); }
     });
     return;
   }
@@ -461,6 +550,27 @@ async function finishEdit(td, tr, row, col, newValue) {
         if (newValue === row.comment) { renderBody(); return; }
         await saveEntity(row.entity_id, { comment: newValue });
         row.comment = newValue;
+        break;
+      }
+      case 'object_id': {
+        const trimmed = (newValue || '').trim();
+        if (trimmed === row.object_id) { renderBody(); return; }
+        if (!trimmed) { toast('entity_id cannot be empty.', true); renderBody(); return; }
+        if (!/^[a-z0-9_]+$/.test(trimmed) || trimmed.startsWith('_') || trimmed.endsWith('_')) {
+          toast('entity_id must be lowercase a–z, 0–9, underscores (no leading/trailing _).', true);
+          renderBody();
+          return;
+        }
+        const newEntityId = row.domain + '.' + trimmed;
+        if (state.rows.some(r => r !== row && r.entity_id === newEntityId)) {
+          toast(`"${newEntityId}" already exists.`, true);
+          renderBody();
+          return;
+        }
+        await saveEntity(row.entity_id, { object_id: trimmed });
+        // Rewrite the local row; keep sort/filter identity stable.
+        row.object_id = trimmed;
+        row.entity_id = newEntityId;
         break;
       }
     }
