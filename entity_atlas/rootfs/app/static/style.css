@@ -202,6 +202,14 @@ html, body {
   font-family: var(--mono);
   font-size: 11px;
   outline: none;
+
+  /* Cap the width so long manufacturer / device names don't blow the
+     filter row past the viewport. The full name is still visible in
+     the popped-open dropdown — this only trims the collapsed button. */
+  max-width: 180px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .selects select:focus { border-color: var(--accent); }
 .toggle input { accent-color: var(--accent); }
@@ -512,7 +520,7 @@ table.grid {
     align-items: stretch;
     gap: 4px;
   }
-  .selects select { width: 100%; padding: 7px 8px; font-size: 12px; }
+  .selects select { width: 100%; max-width: none; padding: 7px 8px; font-size: 12px; }
   .selects .toggle {
     flex-direction: row;
     align-items: center;
@@ -535,4 +543,5 @@ table.grid {
   .stats { gap: 10px; }
   .stat em { font-size: 15px; }
 }
+
 
