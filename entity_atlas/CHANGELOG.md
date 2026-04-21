@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4/1.0.5
+
+- Cap the visible width of the manufacturer / area / floor / device
+  dropdowns on laptop-sized screens, so long device names no longer
+  push the filter row past the right edge. The full names still appear
+  when the dropdown is opened.
+
 ## 1.0.3
 
 - Removed the entity dropdown filter — the search box already does that
