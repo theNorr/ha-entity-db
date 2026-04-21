@@ -6,7 +6,7 @@ A dense, editable spreadsheet view of every entity in Home Assistant.
 
 | Column | Editable | Saved to |
 | --- | --- | --- |
-| `entity_id` | — | — |
+| `entity_id` | ✓ | HA entity registry (`entity_ID`) |
 | friendly name | ✓ | HA entity registry (`name`) |
 | state | — | — |
 | domain | — | — |
@@ -50,3 +50,4 @@ answer questions like:
 The **Export CSV** button downloads the currently-filtered view with
 the currently-visible columns. Good for audits or dropping into a
 spreadsheet.
+
