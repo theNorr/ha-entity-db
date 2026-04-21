@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.3
+
+- Removed the entity dropdown filter — the search box already does that
+  job more ergonomically.
+- Made the top bar and filter strip responsive. On phones the layout
+  stacks vertically, the domain chips scroll horizontally as a single
+  row, and the selects drop into a tidy 2-column grid, so nothing ever
+  sits off-screen.
+  
 ## 1.0.2
 
 - Edit the `entity_id` inline — only the part after the dot is editable,
