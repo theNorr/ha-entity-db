@@ -1,4 +1,5 @@
-#!/usr/bin/env sh
+#!/usr/bin/with-contenv bashio
+
 set -e
 
 echo "[entity-atlas] starting…"
