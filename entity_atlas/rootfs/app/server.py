@@ -25,6 +25,7 @@ from typing import Any
 
 import aiohttp
 from aiohttp import web
+import re
 import websockets
 
 # ---------------------------------------------------------------------------
@@ -51,6 +52,18 @@ LISTEN_PORT = 8099
 
 # SQLite path — /data is persistent across add-on updates.
 DB_PATH = Path("/data/entity_atlas.db")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_OBJECT_ID_RE = re.compile(r"^[a-z0-9_]+$")
+
+
+def _is_valid_object_id(s: str) -> bool:
+    """HA entity object_ids must be lowercase letters, digits, underscores."""
+    return bool(_OBJECT_ID_RE.fullmatch(s)) and not s.startswith("_") and not s.endswith("_")
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +105,29 @@ def db_set_comment(entity_id: str, comment: str) -> None:
                     updated = excluded.updated
             """,
             (entity_id, comment),
+        )
+        c.commit()
+
+
+def db_rename_comment(old_entity_id: str, new_entity_id: str) -> None:
+    """Move a comment row when HA renames an entity_id, so the note
+    stays attached. If the destination already has a comment, leave it
+    alone (last-write-wins is scarier than leaving the rename as-is)."""
+    if old_entity_id == new_entity_id:
+        return
+    with db_connect() as c:
+        existing_new = c.execute(
+            "SELECT 1 FROM comments WHERE entity_id = ?", (new_entity_id,)
+        ).fetchone()
+        if existing_new is not None:
+            LOG.warning(
+                "Not migrating comment for %s → %s: destination already has a comment",
+                old_entity_id, new_entity_id,
+            )
+            return
+        c.execute(
+            "UPDATE comments SET entity_id = ? WHERE entity_id = ?",
+            (new_entity_id, old_entity_id),
         )
         c.commit()
 
@@ -243,11 +279,12 @@ def build_rows(
             or entity_id
         )
 
-        domain = entity_id.split(".", 1)[0]
+        domain, object_id = entity_id.split(".", 1) if "." in entity_id else (entity_id, "")
 
         rows.append(
             {
                 "entity_id": entity_id,
+                "object_id": object_id,
                 "friendly_name": friendly,
                 "state": state.get("state"),
                 "unit": attrs.get("unit_of_measurement"),
@@ -331,7 +368,7 @@ def make_app(ha: HAClient) -> web.Application:
         )
 
     async def api_update_entity(req: web.Request) -> web.Response:
-        """Update entity-registry fields (name, area_id) and/or local comment."""
+        """Update entity-registry fields (name, area_id, entity_id) and/or local comment."""
         try:
             body = await req.json()
         except Exception:
@@ -364,6 +401,28 @@ def make_app(ha: HAClient) -> web.Application:
         if "labels" in body and isinstance(body["labels"], list):
             ha_fields["labels"] = body["labels"]
 
+        # Rename entity_id: the UI sends just the object_id (part after
+        # the dot); we keep the original domain to avoid cross-domain
+        # renames (which HA disallows anyway and would be a foot-gun).
+        new_entity_id: str | None = None
+        if "object_id" in body:
+            new_object_id = (body["object_id"] or "").strip()
+            if not new_object_id:
+                return web.json_response(
+                    {"error": "object_id cannot be empty"}, status=400
+                )
+            # HA accepts only lowercase ascii + digits + underscores.
+            if not _is_valid_object_id(new_object_id):
+                return web.json_response(
+                    {"error": "object_id must be lowercase a–z, 0–9 and underscores only"},
+                    status=400,
+                )
+            domain = entity_id.split(".", 1)[0]
+            candidate = f"{domain}.{new_object_id}"
+            if candidate != entity_id:
+                ha_fields["new_entity_id"] = candidate
+                new_entity_id = candidate
+
         updated = None
         if ha_fields:
             try:
@@ -371,6 +430,11 @@ def make_app(ha: HAClient) -> web.Application:
             except Exception as exc:
                 LOG.exception("HA update_entity failed")
                 return web.json_response({"error": str(exc)}, status=502)
+
+            # If the rename succeeded, migrate the local comment too so
+            # it stays attached to the entity under its new id.
+            if new_entity_id:
+                db_rename_comment(entity_id, new_entity_id)
 
         return web.json_response({"ok": True, "entity": updated})
 
