@@ -39,4 +39,4 @@ map:
 options: {}
 schema: {}
 
-image: "ghcr.io/your-user/{arch}-addon-entity-atlas"
+#image: "ghcr.io/your-user/{arch}-addon-entity-atlas"
