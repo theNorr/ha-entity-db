@@ -329,6 +329,32 @@ table.grid {
 }
 .grid td.saved { animation: flash 900ms ease-out; }
 
+/* entity_id cell: faint domain prefix, sharp object_id */
+.eid { display: inline-flex; align-items: baseline; max-width: 100%; }
+.eid__domain {
+  color: var(--text-faint);
+  user-select: none;
+  flex: 0 0 auto;
+}
+.eid__object {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eid--editing .eid__input {
+  width: 100%;
+  min-width: 80px;
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 0 6px;
+  height: calc(var(--row-h) - 6px);
+  outline: none;
+}
+
 /* =========================================================================
    Toast + column picker
    ========================================================================= */
