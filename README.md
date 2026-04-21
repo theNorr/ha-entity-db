@@ -58,3 +58,4 @@ Home Assistant  ─── WebSocket ───┐
 
 The add-on uses the `SUPERVISOR_TOKEN` that Home Assistant injects into
 every add-on container — no long-lived access tokens to configure.
+
