@@ -68,7 +68,6 @@ const state = {
   floor: '',
   manufacturer: '',
   device: '',                     // device_id filter
-  entity: '',                     // entity_id filter
   missingOnly: false,
   visibleCols: new Set(COLS.filter(c => c.default).map(c => c.key)),
 };
@@ -102,9 +101,6 @@ function wireStaticUI() {
   });
   document.getElementById('f-device').addEventListener('change', (e) => {
     state.device = e.target.value; applyFilters(); renderBody();
-  });
-  document.getElementById('f-entity').addEventListener('change', (e) => {
-    state.entity = e.target.value; applyFilters(); renderBody();
   });
   document.getElementById('f-missing').addEventListener('change', (e) => {
     state.missingOnly = e.target.checked; applyFilters(); renderBody();
@@ -230,14 +226,6 @@ function buildSelects() {
   document.getElementById('f-device').innerHTML =
     '<option value="">all</option>' +
     devices.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
-
-  // Entity dropdown: entity_id → "friendly name (entity_id)", sorted by friendly.
-  const entities = state.rows
-    .map(r => ({ id: r.entity_id, label: `${r.friendly_name} · ${r.entity_id}` }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-  document.getElementById('f-entity').innerHTML =
-    '<option value="">all</option>' +
-    entities.map(e => `<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('');
 }
 
 function applyFilters() {
@@ -248,7 +236,6 @@ function applyFilters() {
     if (state.floor && r.floor_id !== state.floor) return false;
     if (state.manufacturer && r.manufacturer !== state.manufacturer) return false;
     if (state.device && r.device_id !== state.device) return false;
-    if (state.entity && r.entity_id !== state.entity) return false;
     if (state.missingOnly && r.area_id) return false;
     if (!q) return true;
     return (
