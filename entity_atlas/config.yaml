@@ -1,5 +1,5 @@
 name: Entity Atlas
-version: "1.0.3"
+version: "1.0.4"
 slug: entity_atlas
 description: >-
   A dense, editable database of every Home Assistant entity — with
