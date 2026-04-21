@@ -7,5 +7,5 @@ build_from:
 labels:
   org.opencontainers.image.title: "Entity Atlas"
   org.opencontainers.image.description: "Editable database view of every HA entity"
-  org.opencontainers.image.source: "https://github.com/your-user/ha-entity-atlas"
+  org.opencontainers.image.source: "https://github.com/theNorr/ha-entity-db"
   org.opencontainers.image.licenses: "MIT"
