@@ -432,6 +432,141 @@ table.grid {
 .grid-wrap::-webkit-scrollbar-thumb:hover { background: #3a414d; }
 
 /* =========================================================================
+   Notes / readme panel (between filters and grid)
+   ========================================================================= */
+
+.notes {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.notes > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  user-select: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: background 120ms;
+}
+.notes > summary::-webkit-details-marker { display: none; }
+.notes > summary:hover { background: var(--bg-row-hover); }
+.notes__chev {
+  color: var(--accent);
+  transition: transform 160ms;
+  display: inline-block;
+  width: 12px;
+}
+.notes[open] .notes__chev { transform: rotate(90deg); }
+.notes__title { color: var(--text); }
+.notes__hint { color: var(--text-faint); text-transform: none; letter-spacing: 0; }
+.notes[open] .notes__hint { display: none; }
+
+.notes__body {
+  padding: 4px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notes__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.notes__meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.notes__spacer { flex: 1; }
+.btn--primary {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.btn--primary:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.notes__view {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 14px 18px;
+  min-height: 80px;
+  max-height: 38vh;
+  overflow: auto;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.notes__empty { margin: 0; color: var(--text-faint); font-size: 12px; }
+
+/* Very light markdown styling for rendered notes */
+.notes__view h1, .notes__view h2, .notes__view h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 16px 0 6px;
+  color: var(--text);
+}
+.notes__view h1 { font-size: 19px; }
+.notes__view h2 { font-size: 16px; }
+.notes__view h3 { font-size: 14px; }
+.notes__view h1:first-child,
+.notes__view h2:first-child,
+.notes__view h3:first-child { margin-top: 0; }
+.notes__view p { margin: 8px 0; }
+.notes__view ul, .notes__view ol { margin: 6px 0 8px 18px; padding: 0; }
+.notes__view li { margin: 2px 0; }
+.notes__view code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-row-hover);
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+.notes__view pre {
+  background: var(--bg-row-hover);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.notes__view pre code { background: none; border: 0; padding: 0; color: inherit; }
+.notes__view a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.notes__view strong { color: var(--text); }
+.notes__view em { color: var(--text-dim); }
+
+.notes__textarea {
+  width: 100%;
+  min-height: 260px;
+  max-height: 55vh;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+  tab-size: 2;
+}
+
+/* =========================================================================
    Responsive — tablets and phones
    ========================================================================= */
 
@@ -531,6 +666,12 @@ table.grid {
   /* Pop-over reaches edges instead of hanging off the right side. */
   .pop { left: 12px; right: 12px; width: auto; top: auto; bottom: 20px; }
 
+  /* Notes panel: tighter padding, shorter view area on small screens. */
+  .notes > summary { padding: 10px 12px; }
+  .notes__body { padding: 4px 12px 14px; }
+  .notes__view { padding: 12px 14px; max-height: 50vh; }
+  .notes__textarea { min-height: 200px; padding: 10px 12px; }
+
   /* Give the grid a little more room by removing the fixed topbar height
      assumption — the body can scroll normally on a phone. */
   .grid-wrap { height: auto; max-height: none; }
@@ -543,5 +684,6 @@ table.grid {
   .stats { gap: 10px; }
   .stat em { font-size: 15px; }
 }
+
 
 
