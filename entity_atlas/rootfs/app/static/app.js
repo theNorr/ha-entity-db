@@ -8,6 +8,7 @@ const API = {
   data:   'api/data',
   entity: 'api/entity',
   device: 'api/device',
+  notes:  'api/notes',
 };
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,8 @@ const state = {
 
 window.addEventListener('DOMContentLoaded', async () => {
   wireStaticUI();
+  wireNotes();
+  loadNotes();
   await loadData();
 });
 
@@ -677,6 +680,240 @@ function toast(msg, isError = false) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+// ---------------------------------------------------------------------------
+// Notes panel (free-form readme for naming scheme etc.)
+// ---------------------------------------------------------------------------
+
+const notes = {
+  current: '',          // last saved value
+  draft: '',            // unsaved edits
+  editing: false,
+};
+
+function wireNotes() {
+  document.getElementById('notes-edit').addEventListener('click', startEditNotes);
+  document.getElementById('notes-cancel').addEventListener('click', cancelEditNotes);
+  document.getElementById('notes-save').addEventListener('click', saveNotes);
+
+  // Auto-open the panel the first time there's content, so the user
+  // actually sees what they wrote. After that their open/closed choice
+  // is up to the <details> element itself.
+  const details = document.getElementById('notes');
+  details.addEventListener('toggle', () => {
+    // When collapsing while editing, keep edit state but render the
+    // summary hint for what's unsaved.
+    if (!details.open && notes.editing) {
+      toast('Note editor hidden — click the panel to keep editing.');
+    }
+  });
+
+  // Ctrl/Cmd+S while the textarea is focused → save
+  document.getElementById('notes-edit-area').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveNotes();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditNotes();
+    }
+  });
+}
+
+async function loadNotes() {
+  try {
+    const r = await fetch(API.notes);
+    const data = await r.json();
+    notes.current = (data && typeof data.readme === 'string') ? data.readme : '';
+    renderNotes();
+    // If there's content, expand the panel so it's visible on first visit.
+    if (notes.current.trim()) {
+      document.getElementById('notes').open = true;
+    }
+  } catch (err) {
+    console.error('notes load failed', err);
+    document.getElementById('notes-meta').textContent = 'failed to load';
+  }
+}
+
+function renderNotes() {
+  const view = document.getElementById('notes-view');
+  const meta = document.getElementById('notes-meta');
+  const hint = document.getElementById('notes-hint');
+
+  if (!notes.current.trim()) {
+    view.innerHTML = '<p class="notes__empty">Describe your naming convention, prefix glossary, how you tag rooms, anything future-you will be glad to find here. Click <strong>Edit</strong> to start.</p>';
+    meta.textContent = 'empty';
+    hint.textContent = '— click to expand';
+  } else {
+    view.innerHTML = renderMarkdown(notes.current);
+    const lines = notes.current.split('\n').length;
+    const chars = notes.current.length;
+    meta.textContent = `${lines} line${lines === 1 ? '' : 's'} · ${chars} chars`;
+    hint.textContent = '— naming scheme & more';
+  }
+}
+
+function startEditNotes() {
+  notes.editing = true;
+  notes.draft = notes.current;
+
+  const ta = document.getElementById('notes-edit-area');
+  ta.value = notes.draft;
+  ta.hidden = false;
+  document.getElementById('notes-view').hidden = true;
+
+  document.getElementById('notes-edit').hidden = true;
+  document.getElementById('notes-save').hidden = false;
+  document.getElementById('notes-cancel').hidden = false;
+
+  document.getElementById('notes').open = true;
+  ta.focus();
+}
+
+function cancelEditNotes() {
+  notes.editing = false;
+  document.getElementById('notes-edit-area').hidden = true;
+  document.getElementById('notes-view').hidden = false;
+  document.getElementById('notes-edit').hidden = false;
+  document.getElementById('notes-save').hidden = true;
+  document.getElementById('notes-cancel').hidden = true;
+}
+
+async function saveNotes() {
+  const ta = document.getElementById('notes-edit-area');
+  const value = ta.value;
+  try {
+    const r = await fetch(API.notes, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readme: value }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.error) throw new Error(body.error || `HTTP ${r.status}`);
+    notes.current = value;
+    renderNotes();
+    cancelEditNotes();
+    toast('Notes saved.');
+  } catch (err) {
+    console.error(err);
+    toast('Save failed: ' + err.message, true);
+  }
+}
+
+/**
+ * Tiny safe-ish markdown renderer — just enough for a personal readme.
+ * We escape everything first, then reintroduce a small set of markup
+ * constructs. No raw HTML is ever honored.
+ *
+ * Supports: # / ## / ### headings, **bold**, *italic*, `code`,
+ * fenced ```code blocks```, bulleted (- / *) lists, numbered (1.) lists,
+ * horizontal rules (---), and paragraphs.
+ */
+function renderMarkdown(src) {
+  // 1. Escape HTML entirely.
+  const esc = (s) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 2. Pull fenced code blocks out first so their contents are never
+  //    subjected to the inline pass.
+  const blocks = [];
+  src = src.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, _lang, body) => {
+    const token = `\u0000BLOCK${blocks.length}\u0000`;
+    blocks.push(`<pre><code>${esc(body.replace(/\n$/, ''))}</code></pre>`);
+    return token;
+  });
+
+  // 3. Escape everything that's left.
+  let out = esc(src);
+
+  // 4. Line-level pass: split into lines, build heading / list / rule / paragraph.
+  const lines = out.split('\n');
+  const html = [];
+  let listMode = null;   // 'ul' | 'ol' | null
+  let paragraph = [];
+
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      html.push('<p>' + paragraph.join(' ') + '</p>');
+      paragraph = [];
+    }
+  };
+  const flushList = () => {
+    if (listMode) {
+      html.push(`</${listMode}>`);
+      listMode = null;
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    // Fenced-block token on its own line
+    if (/^\u0000BLOCK\d+\u0000$/.test(line)) {
+      flushParagraph(); flushList();
+      const idx = Number(line.match(/\u0000BLOCK(\d+)\u0000/)[1]);
+      html.push(blocks[idx]);
+      continue;
+    }
+
+    if (!line.trim()) {                              // blank line
+      flushParagraph(); flushList();
+      continue;
+    }
+    if (/^---+$/.test(line.trim())) {                // horizontal rule
+      flushParagraph(); flushList();
+      html.push('<hr/>');
+      continue;
+    }
+    const h = line.match(/^(#{1,3})\s+(.*)$/);       // heading
+    if (h) {
+      flushParagraph(); flushList();
+      const level = h[1].length;
+      html.push(`<h${level}>${inlineMd(h[2])}</h${level}>`);
+      continue;
+    }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);       // bullet list
+    if (ul) {
+      flushParagraph();
+      if (listMode !== 'ul') { flushList(); html.push('<ul>'); listMode = 'ul'; }
+      html.push(`<li>${inlineMd(ul[1])}</li>`);
+      continue;
+    }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);      // numbered list
+    if (ol) {
+      flushParagraph();
+      if (listMode !== 'ol') { flushList(); html.push('<ol>'); listMode = 'ol'; }
+      html.push(`<li>${inlineMd(ol[1])}</li>`);
+      continue;
+    }
+
+    // Regular paragraph line
+    flushList();
+    paragraph.push(inlineMd(line));
+  }
+  flushParagraph(); flushList();
+
+  return html.join('\n');
+}
+
+function inlineMd(s) {
+  // Inline code first, so ** and * inside backticks don't get consumed.
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold **x**
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  // Italic *x*  (simple, won't catch every pathological case)
+  s = s.replace(/(^|[^\*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  // Linkify bare URLs (already-escaped, so http and https only)
+  s = s.replace(
+    /(^|[\s(])(https?:\/\/[^\s<)]+)/g,
+    '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>',
+  );
+  return s;
+}
+
 function esc(s) {
   return (s == null ? '' : String(s))
     .replace(/&/g, '&amp;')
@@ -684,3 +921,4 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
