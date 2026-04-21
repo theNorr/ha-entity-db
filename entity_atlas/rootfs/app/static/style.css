@@ -422,3 +422,117 @@ table.grid {
 .grid-wrap::-webkit-scrollbar-thumb,
 .pop__body::-webkit-scrollbar-thumb { background: #2a2f38; border: 2px solid var(--bg); }
 .grid-wrap::-webkit-scrollbar-thumb:hover { background: #3a414d; }
+
+/* =========================================================================
+   Responsive — tablets and phones
+   ========================================================================= */
+
+/* Medium screens: keep things roomy but let the filter row wrap cleanly. */
+@media (max-width: 900px) {
+  .topbar {
+    gap: 14px;
+    padding: 12px 14px;
+  }
+  .stats { gap: 12px; font-size: 10px; }
+  .filters {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  /* On tablets the search takes the whole first row, the rest flows below. */
+  .q { flex-basis: 100%; order: -1; }
+  .chips { max-width: 100%; }
+}
+
+/* Phones: stack everything vertically, let chips/selects/etc. scroll
+   horizontally as rows instead of pushing content off-screen. The grid
+   itself remains horizontally scrollable (it's a spreadsheet, after all). */
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .brand { grid-column: 1; grid-row: 1; }
+  .actions {
+    grid-column: 2;
+    grid-row: 1;
+    flex-wrap: nowrap;
+  }
+  .stats {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    gap: 14px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+    width: 100%;
+  }
+
+  .brand__text h1 { font-size: 19px; }
+  .brand__sub { font-size: 9px; letter-spacing: 0.14em; }
+  .btn { padding: 6px 9px; font-size: 10px; }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .q {
+    flex-basis: auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Chips become a single horizontally-scrolling row so they never
+     push layout off-screen. Overflow is invisible (no scrollbar). */
+  .chips {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; }
+
+  /* Selects stack into a 2-column grid. Labels sit above their controls
+     so nothing gets truncated by tiny screens. */
+  .selects {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 10px;
+    width: 100%;
+  }
+  .selects label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .selects select { width: 100%; padding: 7px 8px; font-size: 12px; }
+  .selects .toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    grid-column: 1 / -1;      /* toggle spans full width on its own row */
+  }
+
+  /* Pop-over reaches edges instead of hanging off the right side. */
+  .pop { left: 12px; right: 12px; width: auto; top: auto; bottom: 20px; }
+
+  /* Give the grid a little more room by removing the fixed topbar height
+     assumption — the body can scroll normally on a phone. */
+  .grid-wrap { height: auto; max-height: none; }
+}
+
+/* Very small phones: drop one stat, tighten padding further. */
+@media (max-width: 380px) {
+  .topbar { padding: 8px 10px; }
+  .filters { padding: 8px 10px; }
+  .stats { gap: 10px; }
+  .stat em { font-size: 15px; }
+}
+
