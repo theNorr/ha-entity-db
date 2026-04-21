@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.6
+
+- New **Naming scheme &amp; notes** panel between the filter bar and the
+  table. Collapsible, with an Edit/Save/Cancel flow and a small safe
+  Markdown renderer (headings, lists, `code`, fenced blocks, bold,
+  italic, links, horizontal rules).
+- `Ctrl`/`⌘`+`S` saves, `Esc` cancels while editing.
+- Notes are persisted in the add-on's SQLite DB alongside the per-entity
+  comments (`/data/entity_atlas.db`).
+  
 ## 1.0.4/1.0.5
 
 - Cap the visible width of the manufacturer / area / floor / device
