@@ -330,12 +330,152 @@ table.grid {
   outline: none;
 }
 
+/* Row action buttons (hide / disable / delete) */
+td.actions-cell {
+  white-space: nowrap;
+  text-align: right;
+  padding: 0 6px;
+}
+.act {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  margin-left: 4px;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: color 100ms, border-color 100ms, background 100ms;
+}
+.act:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.act:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.act.act--danger:hover {
+  color: var(--err);
+  border-color: var(--err);
+}
+.act.act--armed {
+  color: var(--bg);
+  background: var(--err);
+  border-color: var(--err);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1;   }
+  50%      { opacity: 0.55; }
+}
+
+/* Status badges in the actions column */
+.badge {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.badge--hidden   { color: var(--warn); border-color: var(--warn); }
+.badge--disabled { color: var(--err);  border-color: var(--err);  }
+
+/* Dim hidden/disabled rows so they visually recede */
+.grid tbody tr.row-hidden   td:not(.actions-cell) { opacity: 0.55; }
+.grid tbody tr.row-disabled td:not(.actions-cell) {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+  text-decoration-thickness: 1px;
+}
+
+/* Relative time cell */
+.time {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Save flash */
 @keyframes flash {
   0%   { background: var(--accent-soft); }
   100% { background: inherit; }
 }
 .grid td.saved { animation: flash 900ms ease-out; }
+
+/* Time cell — muted but readable */
+.time {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Actions cell */
+.grid td.actions-cell {
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.grid thead th.th--noSort {
+  cursor: default;
+  color: var(--text-faint);
+}
+.grid thead th.th--noSort:hover { color: var(--text-faint); }
+
+.act {
+  appearance: none;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 6px;
+  margin-right: 2px;
+  cursor: pointer;
+  transition: color 120ms, background 120ms, border-color 120ms;
+}
+.act:hover {
+  color: var(--text);
+  background: var(--bg-row-hover);
+  border-color: var(--line-strong);
+}
+.act:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.act--danger:hover { color: var(--err); border-color: #6b2e2e; }
+.act--armed {
+  color: var(--bg) !important;
+  background: var(--err) !important;
+  border-color: var(--err) !important;
+  animation: armedPulse 1.4s ease-in-out infinite;
+}
+@keyframes armedPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(227,120,120,0.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(227,120,120,0.0); }
+}
+
+/* Status badges inside actions column */
+.badge {
+  display: inline-block;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  margin-right: 4px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  vertical-align: middle;
+}
+.badge--hidden   { color: #c4a0e6; border-color: #4e3a6b; }
+.badge--disabled { color: var(--err); border-color: #6b2e2e; }
 
 /* entity_id cell: faint domain prefix, sharp object_id */
 .eid { display: inline-flex; align-items: baseline; max-width: 100%; }
@@ -684,6 +824,7 @@ table.grid {
   .stats { gap: 10px; }
   .stat em { font-size: 15px; }
 }
+
 
 
 
