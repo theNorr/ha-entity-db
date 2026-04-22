@@ -17,7 +17,7 @@ const API = {
 //
 //   key       : field on the row
 //   label     : header text
-//   kind      : 'text' | 'pill' | 'state' | 'mono' | 'comment' | 'list' | 'area' | 'friendly' | 'entity_id'
+//   kind      : 'text' | 'pill' | 'state' | 'mono' | 'comment' | 'list' | 'area' | 'friendly' | 'entity_id' | 'time' | 'actions'
 //   editable  : how the cell saves — null | 'friendly' | 'area' | 'device_name' | 'comment' | 'object_id'
 //   default   : visible by default
 //   width     : initial CSS width hint
@@ -32,6 +32,7 @@ const COLS = [
   { key: 'entity_id',     label: 'entity_id',     kind: 'entity_id', editable: 'object_id',    default: true,  width: '260px' },
   { key: 'friendly_name', label: 'friendly name', kind: 'friendly',  editable: 'friendly',     default: true,  width: '220px' },
   { key: 'state',         label: 'state',         kind: 'state',     editable: null,           default: true,  width: '110px' },
+  { key: 'last_changed',  label: 'last changed',  kind: 'time',      editable: null,           default: true,  width: '150px' },
   { key: 'domain',        label: 'domain',        kind: 'pill',      editable: null,           default: true,  width: '110px' },
   { key: 'area_name',     label: 'room (area)',   kind: 'area',      editable: 'area',         default: true,  width: '160px' },
   { key: 'floor_name',    label: 'floor',         kind: 'text',      editable: null,           default: true,  width: '120px' },
@@ -39,6 +40,8 @@ const COLS = [
   { key: 'manufacturer',  label: 'brand',         kind: 'text',      editable: null,           default: true,  width: '140px' },
   { key: 'model',         label: 'model',         kind: 'text',      editable: null,           default: true,  width: '160px' },
   { key: 'comment',       label: 'comment',       kind: 'comment',   editable: 'comment',      default: true,  width: '280px' },
+  { key: 'actions',       label: '',              kind: 'actions',   editable: null,           default: true,  width: '140px' },
+  { key: 'last_updated',  label: 'last updated',  kind: 'time',      editable: null,           default: false, width: '150px' },
   { key: 'device_class',  label: 'device class',  kind: 'text',      editable: null,           default: false, width: '120px' },
   { key: 'unit',          label: 'unit',          kind: 'mono',      editable: null,           default: false, width: '70px'  },
   { key: 'platform',      label: 'integration',   kind: 'mono',      editable: null,           default: false, width: '120px' },
@@ -70,6 +73,8 @@ const state = {
   manufacturer: '',
   device: '',                     // device_id filter
   missingOnly: false,
+  showHidden: false,              // include hidden_by != null
+  showDisabled: false,            // include disabled_by != null
   visibleCols: new Set(COLS.filter(c => c.default).map(c => c.key)),
 };
 
@@ -82,7 +87,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   wireNotes();
   loadNotes();
   await loadData();
+  // Keep the "X min ago" strings fresh without redrawing the whole grid.
+  setInterval(tickRelativeTimes, 30_000);
 });
+
+/**
+ * Walks every .time cell in the grid and refreshes its text from the
+ * ISO timestamp stored on its title attribute's twin (we stash the
+ * original value on a data attribute to avoid re-parsing localized
+ * strings).
+ */
+function tickRelativeTimes() {
+  const spans = document.querySelectorAll('.grid .time[data-ts]');
+  for (const s of spans) {
+    const dt = new Date(Number(s.dataset.ts));
+    if (!isNaN(dt.getTime())) s.textContent = relativeTime(dt);
+  }
+}
 
 function wireStaticUI() {
   document.getElementById('btn-refresh').addEventListener('click', loadData);
@@ -107,6 +128,12 @@ function wireStaticUI() {
   });
   document.getElementById('f-missing').addEventListener('change', (e) => {
     state.missingOnly = e.target.checked; applyFilters(); renderBody();
+  });
+  document.getElementById('f-show-hidden').addEventListener('change', (e) => {
+    state.showHidden = e.target.checked; applyFilters(); renderBody();
+  });
+  document.getElementById('f-show-disabled').addEventListener('change', (e) => {
+    state.showDisabled = e.target.checked; applyFilters(); renderBody();
   });
 
   // '/' to focus search, Esc to clear
@@ -240,6 +267,9 @@ function applyFilters() {
     if (state.manufacturer && r.manufacturer !== state.manufacturer) return false;
     if (state.device && r.device_id !== state.device) return false;
     if (state.missingOnly && r.area_id) return false;
+    // Hide hidden/disabled entities unless the user explicitly asks.
+    if (!state.showHidden   && r.hidden_by)   return false;
+    if (!state.showDisabled && r.disabled_by) return false;
     if (!q) return true;
     return (
       (r.entity_id     && r.entity_id.toLowerCase().includes(q)) ||
@@ -254,11 +284,17 @@ function applyFilters() {
   });
 
   const k = state.sortKey, dir = state.sortDir;
+  const isTimeKey = (k === 'last_changed' || k === 'last_updated');
   rows.sort((a, b) => {
-    const av = a[k], bv = b[k];
+    let av = a[k], bv = b[k];
+    if (isTimeKey) {
+      av = av ? new Date(av).getTime() : null;
+      bv = bv ? new Date(bv).getTime() : null;
+    }
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
+    if (isTimeKey) return (av - bv) * dir;
     return (String(av) < String(bv) ? -1 : String(av) > String(bv) ? 1 : 0) * dir;
   });
 
@@ -277,6 +313,11 @@ function renderHead() {
     th.textContent = col.label;
     th.style.minWidth = col.width;
     th.dataset.key = col.key;
+    if (col.kind === 'actions') {
+      th.classList.add('th--noSort');
+      tr.appendChild(th);
+      continue;
+    }
     if (state.sortKey === col.key) {
       th.classList.add(state.sortDir === 1 ? 'sort-asc' : 'sort-desc');
     }
@@ -322,6 +363,8 @@ function renderBody() {
 function buildRow(row) {
   const tr = document.createElement('tr');
   tr.dataset.entityId = row.entity_id;
+  if (row.hidden_by)   tr.classList.add('row-hidden');
+  if (row.disabled_by) tr.classList.add('row-disabled');
 
   for (const col of COLS) {
     if (!state.visibleCols.has(col.key)) continue;
@@ -379,6 +422,88 @@ function buildCell(row, col) {
       wrap.appendChild(pre);
       wrap.appendChild(obj);
       td.appendChild(wrap);
+      break;
+    }
+    case 'time': {
+      if (!v) { td.innerHTML = '<span class="dim">—</span>'; break; }
+      const dt = new Date(v);
+      if (isNaN(dt.getTime())) { td.textContent = v; break; }
+      const rel = relativeTime(dt);
+      const span = document.createElement('span');
+      span.className = 'time';
+      span.textContent = rel;
+      span.title = dt.toLocaleString();  // full date on hover
+      span.dataset.ts = String(dt.getTime());
+      td.appendChild(span);
+      break;
+    }
+    case 'actions': {
+      td.classList.add('actions-cell');
+      // Row status indicators come first, then the three action buttons.
+      if (row.hidden_by) {
+        const b = document.createElement('span');
+        b.className = 'badge badge--hidden';
+        b.textContent = 'hidden';
+        b.title = `hidden_by: ${row.hidden_by}`;
+        td.appendChild(b);
+      }
+      if (row.disabled_by) {
+        const b = document.createElement('span');
+        b.className = 'badge badge--disabled';
+        b.textContent = 'disabled';
+        b.title = `disabled_by: ${row.disabled_by}`;
+        td.appendChild(b);
+      }
+
+      // Hide toggle (user-level only; can't un-hide integration-hidden)
+      const hideBtn = actionBtn(
+        row.hidden_by ? '↺' : '⌀',
+        row.hidden_by ? 'Un-hide' : 'Hide from UI',
+        async () => {
+          try {
+            await saveEntity(row.entity_id, { hidden: !row.hidden_by });
+            row.hidden_by = row.hidden_by ? null : 'user';
+            applyFilters(); renderBody();
+            toast(row.hidden_by ? 'Hidden.' : 'Un-hidden.');
+          } catch (err) { toast('Hide failed: ' + err.message, true); }
+        },
+        (row.hidden_by && row.hidden_by !== 'user'),  // disabled if integration-hidden
+      );
+      td.appendChild(hideBtn);
+
+      // Disable toggle
+      const disBtn = actionBtn(
+        row.disabled_by ? '↺' : '⏻',
+        row.disabled_by ? 'Re-enable' : 'Disable',
+        async () => {
+          try {
+            await saveEntity(row.entity_id, { disabled: !row.disabled_by });
+            row.disabled_by = row.disabled_by ? null : 'user';
+            applyFilters(); renderBody();
+            toast(row.disabled_by ? 'Disabled.' : 'Enabled.');
+          } catch (err) { toast('Disable failed: ' + err.message, true); }
+        },
+        (row.disabled_by && row.disabled_by !== 'user'),
+      );
+      td.appendChild(disBtn);
+
+      // Delete entity — requires confirmation. A second click within 3s commits.
+      const delBtn = actionBtn('🗑', 'Delete entity', () => confirmDelete(delBtn, row));
+      delBtn.classList.add('act--danger');
+      td.appendChild(delBtn);
+
+      // Delete whole device — only if this row has a device AND that
+      // device has at least one config entry we can detach from.
+      if (row.device_id && (row.device_config_entries || []).length) {
+        const delDev = actionBtn(
+          '⌦',
+          `Delete device "${row.device_name || row.device_id}" (removes all its entities)`,
+          () => confirmDeleteDevice(delDev, row),
+        );
+        delDev.classList.add('act--danger');
+        td.appendChild(delDev);
+      }
+
       break;
     }
     default: {
@@ -596,6 +721,138 @@ async function saveDevice(device_id, patch) {
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok || body.error) throw new Error(body.error || `HTTP ${r.status}`);
+}
+
+// ---------------------------------------------------------------------------
+// Row actions: hide / disable / delete
+// ---------------------------------------------------------------------------
+
+function actionBtn(glyph, label, onClick, disabled = false) {
+  const b = document.createElement('button');
+  b.className = 'act';
+  b.type = 'button';
+  b.textContent = glyph;
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  if (disabled) {
+    b.disabled = true;
+    b.title = label + ' (locked by integration)';
+  } else {
+    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  }
+  return b;
+}
+
+/**
+ * Two-step delete: first click arms the button, a second click within
+ * 3s actually removes. This keeps deletes recoverable (click anywhere
+ * else to cancel) without needing a modal dialog.
+ */
+function confirmDelete(btn, row) {
+  if (btn.dataset.armed) {
+    // Armed already → commit.
+    clearTimeout(Number(btn.dataset.armedTimer));
+    btn.removeAttribute('data-armed');
+    btn.removeAttribute('data-armed-timer');
+    btn.classList.remove('act--armed');
+    doDeleteEntity(row);
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.classList.add('act--armed');
+  btn.textContent = '✓';
+  btn.title = 'Click again to confirm delete';
+  const t = setTimeout(() => {
+    btn.removeAttribute('data-armed');
+    btn.removeAttribute('data-armed-timer');
+    btn.classList.remove('act--armed');
+    btn.textContent = '🗑';
+    btn.title = 'Delete entity';
+  }, 3000);
+  btn.dataset.armedTimer = String(t);
+}
+
+function confirmDeleteDevice(btn, row) {
+  if (btn.dataset.armed) {
+    clearTimeout(Number(btn.dataset.armedTimer));
+    btn.removeAttribute('data-armed');
+    btn.removeAttribute('data-armed-timer');
+    btn.classList.remove('act--armed');
+    doDeleteDevice(row.device_id, row.device_config_entries || []);
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.classList.add('act--armed');
+  btn.textContent = '✓';
+  btn.title = `Click again to delete device "${row.device_name || row.device_id}" and all its entities`;
+  const t = setTimeout(() => {
+    btn.removeAttribute('data-armed');
+    btn.removeAttribute('data-armed-timer');
+    btn.classList.remove('act--armed');
+    btn.textContent = '⌦';
+    btn.title = `Delete device "${row.device_name || row.device_id}"`;
+  }, 3000);
+  btn.dataset.armedTimer = String(t);
+}
+
+async function doDeleteEntity(row) {
+  try {
+    const r = await fetch(`api/entity/${encodeURIComponent(row.entity_id)}`, {
+      method: 'DELETE',
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.error) throw new Error(body.error || `HTTP ${r.status}`);
+
+    // Drop locally and re-render.
+    state.rows = state.rows.filter(r2 => r2 !== row);
+    applyFilters();
+    renderBody();
+    toast(`${row.entity_id} deleted.`);
+  } catch (err) {
+    // HA's usual reason: the integration still provides this entity.
+    toast(`Delete failed: ${err.message}`, true);
+  }
+}
+
+async function doDeleteDevice(device_id, config_entries) {
+  try {
+    const r = await fetch(`api/device/${encodeURIComponent(device_id)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config_entries }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.error) throw new Error(body.error || `HTTP ${r.status}`);
+    // Remove every entity belonging to this device from the local view —
+    // HA removes them server-side when the device goes away.
+    state.rows = state.rows.filter(r2 => r2.device_id !== device_id);
+    applyFilters();
+    renderBody();
+    toast('Device deleted.');
+  } catch (err) {
+    toast(`Delete device failed: ${err.message}`, true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Relative time formatter
+// ---------------------------------------------------------------------------
+
+function relativeTime(dt) {
+  const diff = Date.now() - dt.getTime();
+  const abs = Math.abs(diff);
+  const s = Math.round(abs / 1000);
+  if (s < 45)        return diff >= 0 ? 'just now' : 'soon';
+  const m = Math.round(s / 60);
+  if (m < 60)        return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24)        return `${h} h ago`;
+  const d = Math.round(h / 24);
+  if (d < 14)        return `${d} d ago`;
+  const w = Math.round(d / 7);
+  if (w < 8)         return `${w} w ago`;
+  // Longer than 8 weeks: show a date in a compact, locale-aware form.
+  return dt.toLocaleDateString();
 }
 
 // ---------------------------------------------------------------------------
@@ -921,4 +1178,3 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
-
