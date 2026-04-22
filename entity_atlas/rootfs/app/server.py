@@ -267,6 +267,29 @@ class HAClient:
             **fields,
         )
 
+    async def remove_entity(self, entity_id: str) -> None:
+        """Delete an entity from the registry.
+
+        HA only lets you delete an entity that is no longer being provided
+        by an integration (an "orphaned" or "restored" entity). If its
+        integration is still active, HA will re-create the registry entry
+        immediately, which is confusing — we surface the failure to the UI.
+        """
+        await self.call("config/entity_registry/remove", entity_id=entity_id)
+
+    async def remove_device(self, device_id: str, config_entry_id: str) -> dict:
+        """Remove the association of a config entry from a device.
+
+        HA deletes the device itself automatically once its last config
+        entry is removed. The integration must implement
+        `async_remove_config_entry_device` for this call to succeed.
+        """
+        return await self.call(
+            "config/device_registry/remove_config_entry",
+            device_id=device_id,
+            config_entry_id=config_entry_id,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Joining + serialization
@@ -321,6 +344,11 @@ def build_rows(
                 "domain": domain,
                 "device_class": attrs.get("device_class") or e.get("device_class"),
 
+                # Last-change info — ISO strings, formatted client-side so
+                # "5 min ago" stays live without another server round-trip.
+                "last_changed": state.get("last_changed"),
+                "last_updated": state.get("last_updated"),
+
                 # Device
                 "device_id": e.get("device_id"),
                 "device_name": (device.get("name_by_user") or device.get("name")) if device else None,
@@ -329,6 +357,15 @@ def build_rows(
                 "hw_version": device.get("hw_version") if device else None,
                 "sw_version": device.get("sw_version") if device else None,
                 "via_device_id": device.get("via_device_id") if device else None,
+                # config_entries on the device (needed to remove the device:
+                # HA deletes the device only once its last config_entry link
+                # is removed). An entity can also belong directly to one
+                # config_entry via its own config_entry_id.
+                "device_config_entries": list(device.get("config_entries") or []) if device else [],
+                # Used to drive the delete-device path: the device can be
+                # deleted through any one of its config entries (HA removes
+                # the device itself when its last config entry is gone).
+                "device_config_entries": list(device.get("config_entries") or []) if device else [],
 
                 # Area & floor
                 "area_id": area_id,
@@ -345,6 +382,11 @@ def build_rows(
                 "entity_category": e.get("entity_category"),
                 "labels": e.get("labels") or [],
                 "icon": e.get("icon") or attrs.get("icon"),
+
+                # When this entity's state last changed / was last pushed.
+                # ISO-8601 strings from HA; the UI formats them for display.
+                "last_changed": state.get("last_changed"),
+                "last_updated": state.get("last_updated"),
 
                 # Local-only
                 "comment": comments.get(entity_id, ""),
@@ -499,6 +541,125 @@ def make_app(ha: HAClient) -> web.Application:
     app.router.add_get("/api/data", api_data)
     app.router.add_post("/api/entity", api_update_entity)
     app.router.add_post("/api/device", api_update_device)
+
+    # --- Deletion --------------------------------------------------------
+    #
+    # Entity deletion only works for entities whose integration is no longer
+    # providing them (otherwise HA re-creates the registry entry immediately).
+    # Device deletion removes each config-entry association in turn — HA
+    # auto-deletes the device itself once the last association is gone.
+
+    async def api_delete_entity(req: web.Request) -> web.Response:
+        entity_id = req.match_info["entity_id"]
+        try:
+            await ha.remove_entity(entity_id)
+        except Exception as exc:
+            LOG.exception("HA remove_entity failed")
+            return web.json_response({"error": str(exc)}, status=502)
+
+        # Also drop the local comment — if the entity is gone there's no
+        # point keeping an orphan note pinned to its old id.
+        with db_connect() as c:
+            c.execute("DELETE FROM comments WHERE entity_id = ?", (entity_id,))
+            c.commit()
+        return web.json_response({"ok": True})
+
+    async def api_delete_device(req: web.Request) -> web.Response:
+        device_id = req.match_info["device_id"]
+        # The caller tells us which config_entry_ids are currently linked
+        # to the device. We intentionally don't re-fetch — it keeps the
+        # action idempotent and avoids a race if HA already removed one.
+        try:
+            body = await req.json()
+        except Exception:
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        entries = body.get("config_entries") or []
+        if not isinstance(entries, list) or not entries:
+            return web.json_response(
+                {"error": "config_entries (non-empty list) required"},
+                status=400,
+            )
+
+        removed = 0
+        last_error: str | None = None
+        for entry_id in entries:
+            try:
+                await ha.remove_device(device_id, entry_id)
+                removed += 1
+            except Exception as exc:
+                last_error = str(exc)
+                LOG.warning("remove_device(%s, %s) failed: %s", device_id, entry_id, exc)
+
+        if removed == 0:
+            return web.json_response(
+                {"error": last_error or "could not remove device"},
+                status=502,
+            )
+        return web.json_response({"ok": True, "removed": removed, "error": last_error})
+
+    app.router.add_delete("/api/entity/{entity_id}", api_delete_entity)
+    app.router.add_delete("/api/device/{device_id}", api_delete_device)
+
+    # --- Delete endpoints ------------------------------------------------
+
+    async def api_delete_entity(req: web.Request) -> web.Response:
+        entity_id = req.match_info.get("entity_id") or ""
+        if not entity_id:
+            return web.json_response({"error": "entity_id required"}, status=400)
+        try:
+            await ha.remove_entity(entity_id)
+        except Exception as exc:
+            # HA returns a clear error if the entity's integration still
+            # provides it — pass the message through so the user sees why.
+            LOG.warning("remove_entity failed for %s: %s", entity_id, exc)
+            return web.json_response({"error": str(exc)}, status=409)
+        # Also drop the local comment for this entity.
+        with db_connect() as c:
+            c.execute("DELETE FROM comments WHERE entity_id = ?", (entity_id,))
+            c.commit()
+        return web.json_response({"ok": True})
+
+    async def api_delete_device(req: web.Request) -> web.Response:
+        device_id = req.match_info.get("device_id") or ""
+        if not device_id:
+            return web.json_response({"error": "device_id required"}, status=400)
+        try:
+            body = await req.json()
+        except Exception:
+            body = {}
+        config_entries = body.get("config_entries") or []
+        if not config_entries:
+            return web.json_response(
+                {"error": "device has no config_entries — cannot be removed via the API"},
+                status=409,
+            )
+
+        # Remove the device from each of its config entries in sequence;
+        # HA removes the device itself once the last config entry is gone.
+        failed: list[str] = []
+        for ce_id in config_entries:
+            try:
+                await ha.remove_device(device_id, ce_id)
+            except Exception as exc:
+                LOG.warning(
+                    "remove_device(%s, %s) failed: %s", device_id, ce_id, exc
+                )
+                failed.append(f"{ce_id}: {exc}")
+        if failed:
+            # If all calls failed the integration most likely doesn't
+            # implement `async_remove_config_entry_device`.
+            return web.json_response(
+                {
+                    "error": "device could not be removed: "
+                             + "; ".join(failed)
+                             + ". The integration may not support device removal.",
+                },
+                status=409,
+            )
+        return web.json_response({"ok": True})
+
+    app.router.add_delete("/api/entity/{entity_id}", api_delete_entity)
+    app.router.add_delete("/api/device/{device_id}",  api_delete_device)
 
     # --- Free-form notes (description of naming scheme etc.) -------------
 
