@@ -1,5 +1,28 @@
 # Changelog
 
+
+## 1.0.7
+
+- New **actions column** on every row with three buttons: hide from UI,
+  disable, and delete. A fourth button (delete device) appears when the
+  entity belongs to a device.
+- Delete is a two-step click: first click arms the button (turns red and
+  pulses for 3 s), second click commits. Avoids accidental loss without
+  needing a modal.
+- Hidden rows fade to grey; disabled rows gain a strike-through so you
+  can tell at a glance. A small `hidden` / `disabled` badge sits in the
+  actions cell.
+- Two new filter toggles: **show hidden** and **show disabled** — off
+  by default, so the grid matches what you'd see in the HA UI.
+- New **last changed** column showing relative time ("5 min ago"), with
+  the full timestamp visible on hover. The column auto-refreshes every
+  30 s without redrawing the grid. A **last updated** column is also
+  available in the Columns picker.
+- Entity deletion drops the local comment at the same time so nothing
+  orphans.
+- Delete-device removes each of the device's config-entry associations
+  in turn — HA then deletes the device and all its entities itself.
+  
 ## 1.0.6
 
 - New **Naming scheme &amp; notes** panel between the filter bar and the
